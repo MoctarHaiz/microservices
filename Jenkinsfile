@@ -29,13 +29,11 @@ pipeline {
         stage('Push Image') {
             steps {
                 withCredentials([string(credentialsId: 'dockerhub-password', variable: 'DOCKER_PASSWORD')]) {
-                    sh ''
-                    '
+                    sh '''
                     echo $DOCKER_PASSWORD | docker login - u myusername--password - stdin
                     docker push $DOCKER_IMAGE
                     docker logout
-                        ''
-                    '
+                        '''
                 }
             }
         }
