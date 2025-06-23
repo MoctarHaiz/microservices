@@ -16,8 +16,9 @@ pipeline {
         
         stage('Install Dependencies') {
             steps {
-                sh 'cd nodejs-k8s-app'
-                sh 'npm install'
+                dir('nodejs-k8s-app') {
+                    sh 'npm install'
+                }
             }
         }
         
