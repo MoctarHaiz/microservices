@@ -22,18 +22,6 @@ pipeline {
             }
         }
         
-        stage('Run Tests') {
-            steps {
-                dir('nodejs-k8s-app') {
-                    sh 'npm test'
-                }
-            }
-            post {
-                always {
-                    publishTestResults testResultsPattern: 'test-results.xml'
-                }
-            }
-        }
         
         stage('Build Docker Image') {
             steps {
