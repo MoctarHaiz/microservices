@@ -1,16 +1,76 @@
 pipeline {
     agent any
-
+    
     environment {
-        DOCKER_HOST = 'tcp://dind:2375'
+        DOCKER_IMAGE = 'nodejs-k8s-app'
+        DOCKER_TAG = "${BUILD_NUMBER}"
+        KUBECONFIG_CREDENTIAL_ID = 'kubeconfig'
     }
-
+    
     stages {
-        stage('Build Docker Image') {
+        stage('Checkout') {
             steps {
-                sh 'docker version'
-                sh 'docker build -t my-app .'
+                checkout scm
             }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                dir('nodejs-k8s-app') {
+                    sh 'npm install'
+                }
+            }
+        }
+        
+
+        
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: "${KUBECONFIG_CREDENTIAL_ID}", variable: 'KUBECONFIG')]) {
+                    sh '''
+                        # Apply Kubernetes manifests
+                        kubectl apply -f k8s/namespace.yaml
+                        
+                        # Update deployment image
+                        sed -i.bak "s|nodejs-k8s-app:latest|nodejs-k8s-app:${BUILD_NUMBER}|g" k8s/deployment.yaml
+                        
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/service.yaml
+                        kubectl apply -f k8s/ingress.yaml
+                        
+                        # Wait for rollout
+                        kubectl rollout status deployment/nodejs-app -n nodejs-app --timeout=300s
+                        
+                        # Restore original deployment file
+                        mv k8s/deployment.yaml.bak k8s/deployment.yaml
+                    '''
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                withCredentials([file(credentialsId: "${KUBECONFIG_CREDENTIAL_ID}", variable: 'KUBECONFIG')]) {
+                    sh '''
+                        kubectl get pods -n nodejs-app
+                        kubectl get services -n nodejs-app
+                        kubectl get ingress -n nodejs-app
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline succeeded! Application deployed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed! Check logs for details.'
+        }
+        always {
+            cleanWs()
         }
     }
 }
