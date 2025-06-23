@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE = 'nodejs-k8s-app'
+        DOCKER_TAG = "${BUILD_NUMBER}"
+        KUBECONFIG_CREDENTIAL_ID = 'kubeconfig'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                sh 'npm test'
+            }
+            post {
+                always {
+                    publishTestResults testResultsPattern: 'test-results.xml'
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Configure Docker to use Minikube's Docker daemon
+                    sh 'eval $(minikube docker-env)'
+                    
+                    // Build image
+                    def image = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                    docker.build("${DOCKER_IMAGE}:latest")
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: "${KUBECONFIG_CREDENTIAL_ID}", variable: 'KUBECONFIG')]) {
+                    sh '''
+                        # Apply Kubernetes manifests
+                        kubectl apply -f k8s/namespace.yaml
+                        
+                        # Update deployment image
+                        sed -i.bak "s|nodejs-k8s-app:latest|nodejs-k8s-app:${BUILD_NUMBER}|g" k8s/deployment.yaml
+                        
+                        kubectl apply -f k8s/deployment.yaml
+                        kubectl apply -f k8s/service.yaml
+                        kubectl apply -f k8s/ingress.yaml
+                        
+                        # Wait for rollout
+                        kubectl rollout status deployment/nodejs-app -n nodejs-app --timeout=300s
+                        
+                        # Restore original deployment file
+                        mv k8s/deployment.yaml.bak k8s/deployment.yaml
+                    '''
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                withCredentials([file(credentialsId: "${KUBECONFIG_CREDENTIAL_ID}", variable: 'KUBECONFIG')]) {
+                    sh '''
+                        kubectl get pods -n nodejs-app
+                        kubectl get services -n nodejs-app
+                        kubectl get ingress -n nodejs-app
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline succeeded! Application deployed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed! Check logs for details.'
+        }
+        always {
+            cleanWs()
+        }
+    }
+}
