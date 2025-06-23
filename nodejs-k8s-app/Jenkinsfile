@@ -30,7 +30,12 @@ pipeline {
                     dir('nodejs-k8s-app') {
                     // Configure Docker to use Minikube's Docker daemon
                     sh 'eval $(minikube docker-env)'
-                    
+
+                     sh '''
+                        eval $(minikube docker-env)
+                        docker info || { echo "Docker daemon not accessible"; exit 1; }
+                    '''
+                        
                     // Build image
                     def image = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
                     }
