@@ -24,7 +24,9 @@ pipeline {
         
         stage('Run Tests') {
             steps {
-                sh 'npm test'
+                dir('nodejs-k8s-app') {
+                    sh 'npm test'
+                }
             }
             post {
                 always {
