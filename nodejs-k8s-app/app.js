@@ -14,8 +14,8 @@ app.get('/health', (req, res) => {
     res.json({ status: 'healthy' });
 });
 
-app.listen(port, () => {
+/*app.listen(port, () => {
     console.log(`Server running on port ${port}`);
-});
+});*/
 
 module.exports = app;
